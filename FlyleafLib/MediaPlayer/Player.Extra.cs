@@ -398,20 +398,56 @@ unsafe partial class Player
     /// <returns></returns>
     public System.Drawing.Bitmap TakeSnapshotToBitmap(int width = -1, int height = -1, VideoFrame frame = null) => renderer?.GetBitmap(width, height, frame);
 
-    public void ZoomIn()         => Zoom += Config.Player.ZoomOffset;
-    public void ZoomOut()       { if (Zoom - Config.Player.ZoomOffset < 1) return; Zoom -= Config.Player.ZoomOffset; }
+    /// <summary>
+    /// Zoom step size (%) based on the current zoom level: finer steps while
+    /// close to 100%, coarser steps once zoomed in a lot (Config.Player.ZoomOffset
+    /// is the base/first-tier step; further tiers are fixed multiples of it).
+    /// </summary>
+    static int GetZoomStep(int zoomPercent, int baseStep)
+    {
+        if (zoomPercent < 300)
+            return baseStep;               // 10
+        if (zoomPercent < 500)
+            return baseStep * 5;           // 50
+        return baseStep * 10;              // 100
+    }
+
+    public void ZoomIn()
+    {
+        int cur = Zoom;
+        Zoom = cur + GetZoomStep(cur, Config.Player.ZoomOffset);
+    }
+    public void ZoomOut()
+    {
+        int cur = Zoom;
+        int next = cur - GetZoomStep(cur - 1, Config.Player.ZoomOffset);
+        if (next < 1) return;
+        Zoom = next;
+    }
 
     /// <summary>
     /// Pan zoom in with center point
     /// </summary>
     /// <param name="p"></param>
-    public void ZoomIn(Point p) { renderer.ZoomWithCenterPoint(p, renderer.Zoom + Config.Player.ZoomOffset / 100.0); RaiseUI(nameof(Zoom)); }
+    public void ZoomIn(Point p)
+    {
+        int cur = Zoom;
+        renderer.ZoomWithCenterPoint(p, (cur + GetZoomStep(cur, Config.Player.ZoomOffset)) / 100.0);
+        RaiseUI(nameof(Zoom));
+    }
 
     /// <summary>
     /// Pan zoom out with center point
     /// </summary>
     /// <param name="p"></param>
-    public void ZoomOut(Point p){ double zoom = renderer.Zoom - Config.Player.ZoomOffset / 100.0; if (zoom < 0.001) return; renderer.ZoomWithCenterPoint(p, zoom); RaiseUI(nameof(Zoom)); }
+    public void ZoomOut(Point p)
+    {
+        int cur = Zoom;
+        int next = cur - GetZoomStep(cur - 1, Config.Player.ZoomOffset);
+        if (next < 1) return;
+        renderer.ZoomWithCenterPoint(p, next / 100.0);
+        RaiseUI(nameof(Zoom));
+    }
 
     /// <summary>
     /// Pan zoom (no raise)
