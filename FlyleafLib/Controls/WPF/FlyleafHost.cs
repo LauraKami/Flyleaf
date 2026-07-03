@@ -1269,25 +1269,29 @@ public class FlyleafHost : ContentControl, IHostPlayer, IDisposable
             return; // No Capture
         }
 
-        // PanMove
-        else if (Player != null && 
+        // PanMove: plain drag moves the video (was Ctrl+drag). Window drag-move
+        // (below) moves to Ctrl+drag instead - swapped so the default drag
+        // gesture pans the video rather than dragging the app window/control.
+        else if (Player != null &&
             (PanMoveOnCtrl == availWindow || PanMoveOnCtrl == AvailableWindows.Both) &&
-            (Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl)))
+            !(Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl)))
         {
             panPrevX    = Player.PanXOffset;
             panPrevY    = Player.PanYOffset;
             IsPanMoving = true;
         }
 
-        // DragMoveOwner
-        else if (IsAttached && Owner != null && 
+        // DragMoveOwner (now requires Ctrl, see PanMove above)
+        else if ((Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl)) &&
+            IsAttached && Owner != null &&
             (AttachedDragMove == availDragMoveOwner || AttachedDragMove == AttachedDragMoveOptions.BothOwner))
             IsDragMovingOwner = true;
-         
 
-        // DragMove (Attach|Detach)
-        else if ((IsAttached && (AttachedDragMove == availDragMove  || AttachedDragMove == AttachedDragMoveOptions.Both))
-            ||  (!IsAttached && (DetachedDragMove == availWindow    || DetachedDragMove == AvailableWindows.Both)))
+
+        // DragMove (Attach|Detach) (now requires Ctrl, see PanMove above)
+        else if ((Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl)) &&
+            ((IsAttached && (AttachedDragMove == availDragMove  || AttachedDragMove == AttachedDragMoveOptions.Both))
+            ||  (!IsAttached && (DetachedDragMove == availWindow    || DetachedDragMove == AvailableWindows.Both))))
             IsDragMoving = true;
 
         else
