@@ -248,17 +248,24 @@ public partial class Renderer
     public void ZoomWithCenterPoint(Point p, double zoom)
     {
         /* Notes
-         * 
+         *
          * Zoomed Point (ZP)    // the current point in a -possible- zoomed viewport
          * Zoom (Z)
          * Unzoomed Point (UP)  // the actual pixel of the current point
          * Viewport Point (VP)
          * Center Point (CP)
-         * 
+         *
          * UP = (VP + ZP) / Z =>
          * ZP = (UP * Z) - VP
          * CP = VP / (ZP - 1) (when UP = ZP)
          */
+
+        // Clamp before computing zoomCenter below: otherwise the center point
+        // keeps drifting from the unclamped target on every call once the
+        // zoom ceiling/floor is hit (this.zoom stays capped but zoomCenter
+        // doesn't), requiring several wheel notches in reverse before the
+        // zoom visibly moves again.
+        zoom = ClampZoom(zoom);
 
         if (!IsPointWithInViewPort(p))
         {

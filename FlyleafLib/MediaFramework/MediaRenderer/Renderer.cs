@@ -120,7 +120,7 @@ public partial class Renderer : NotifyPropertyChanged, IDisposable
     {
         lock(lockDevice)
         {
-            this.zoom = zoom;
+            this.zoom = ClampZoom(zoom);
 
             if (Disposed)
                 return;
@@ -149,7 +149,7 @@ public partial class Renderer : NotifyPropertyChanged, IDisposable
     {
         lock(lockDevice)
         {
-            this.zoom = zoom;
+            this.zoom = ClampZoom(zoom);
             zoomCenter = p;
 
             if (Disposed)
@@ -165,7 +165,7 @@ public partial class Renderer : NotifyPropertyChanged, IDisposable
         {
             panXOffset = panX;
             panYOffset = panY;
-            this.zoom = zoom;
+            this.zoom = ClampZoom(zoom);
             zoomCenter = p;
             UpdateRotation(rotation, false);
 
@@ -175,6 +175,28 @@ public partial class Renderer : NotifyPropertyChanged, IDisposable
             if (refresh)
                 SetViewport();
         }
+    }
+
+    /// <summary>
+    /// Minimum number of source video pixels that must stay visible on the
+    /// constrained axis. Below this, the D3D11 video processor's source rect
+    /// degenerates (rounds to zero/invalid width or height), which freezes
+    /// or glitches the image instead of just stopping the zoom.
+    /// </summary>
+    const int MinVisibleSourcePixels = 8;
+
+    /// <summary>
+    /// Caps zoom so the visible crop of the source video never shrinks below
+    /// MinVisibleSourcePixels on its smallest dimension. The exact ceiling
+    /// depends on the video's resolution (a low-res source hits it sooner).
+    /// </summary>
+    double ClampZoom(double zoom)
+    {
+        if (VideoRect.Right < 1 || VideoRect.Bottom < 1)
+            return zoom; // not opened yet, nothing to clamp against
+
+        double maxZoom = Math.Min(VideoRect.Right, VideoRect.Bottom) / (double) MinVisibleSourcePixels;
+        return maxZoom < 1 ? zoom : Math.Min(zoom, maxZoom);
     }
 
     public int              UniqueId        { get; private set; }

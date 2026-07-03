@@ -290,7 +290,7 @@ public unsafe partial class Player : NotifyPropertyChanged, IDisposable
     /// </summary>
     public int          Zoom
     {
-        get => (int)(renderer.Zoom * 100);
+        get => (int)Math.Round(renderer.Zoom * 100);
         set { renderer.SetZoom(renderer.Zoom = value / 100.0); RaiseUI(nameof(Zoom)); }
         //set { renderer.SetZoomAndCenter(renderer.Zoom = value / 100.0, Renderer.ZoomCenterPoint); RaiseUI(nameof(Zoom)); } // should reset the zoom center point?
     }
