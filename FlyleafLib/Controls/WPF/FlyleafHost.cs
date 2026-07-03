@@ -1492,10 +1492,12 @@ public class FlyleafHost : ContentControl, IHostPlayer, IDisposable
         else if ((Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift)) &&
             (PanRotateOnShiftWheel == AvailableWindows.Surface || PanZoomOnCtrlWheel == AvailableWindows.Both))
         {
+            var cur = e.GetPosition(Surface);
+            Point curDpi = new(cur.X * DpiX, cur.Y * DpiY);
             if (e.Delta > 0)
-                Player.RotateRight();
+                Player.ZoomIn(curDpi);
             else
-                Player.RotateLeft();
+                Player.ZoomOut(curDpi);
         }
 
         //else if (IsAttached) // TBR ScrollViewer
@@ -1521,10 +1523,12 @@ public class FlyleafHost : ContentControl, IHostPlayer, IDisposable
         else if ((Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift)) &&
             (PanRotateOnShiftWheel == AvailableWindows.Overlay || PanZoomOnCtrlWheel == AvailableWindows.Both))
         {
+            var cur = e.GetPosition(Overlay);
+            Point curDpi = new(cur.X * DpiX, cur.Y * DpiY);
             if (e.Delta > 0)
-                Player.RotateRight();
+                Player.ZoomIn(curDpi);
             else
-                Player.RotateLeft();
+                Player.ZoomOut(curDpi);
         }
     }
 
