@@ -114,6 +114,15 @@ public class FlyleafHost : ContentControl, IHostPlayer, IDisposable
     float curResizeRatioIfEnabled;
     bool surfaceClosed, surfaceClosing, overlayClosed;
     int panPrevX, panPrevY;
+
+    // Shift+Drag (zoom) / Ctrl+Drag (frame step): accumulates movement since
+    // the last processed point, projected on the up/right = plus diagonal;
+    // fires one action every DragStepPixels and keeps the remainder so fast
+    // drags fire multiple steps smoothly.
+    const double DragStepPixels = 15;
+    double dragStepAccum;
+    Point dragStepLastPoint;
+
     bool isMouseBindingsSubscribedSurface;
     bool isMouseBindingsSubscribedOverlay;
     Window standAloneOverlay;
@@ -466,6 +475,28 @@ public class FlyleafHost : ContentControl, IHostPlayer, IDisposable
     }
     public static readonly DependencyProperty IsDragMovingOwnerProperty =
         DependencyProperty.Register(nameof(IsDragMovingOwner), typeof(bool), typeof(FlyleafHost), new PropertyMetadata(false));
+
+    /// <summary>
+    /// Shift+Drag on the video: dragging up/right zooms in, down/left zooms out
+    /// </summary>
+    public bool IsZoomDragging
+    {
+        get { return (bool)GetValue(IsZoomDraggingProperty); }
+        private set { SetValue(IsZoomDraggingProperty, value); }
+    }
+    public static readonly DependencyProperty IsZoomDraggingProperty =
+        DependencyProperty.Register(nameof(IsZoomDragging), typeof(bool), typeof(FlyleafHost), new PropertyMetadata(false));
+
+    /// <summary>
+    /// Ctrl+Drag on the video: dragging up/right steps to the next frame, down/left to the previous frame
+    /// </summary>
+    public bool IsStepDragging
+    {
+        get { return (bool)GetValue(IsStepDraggingProperty); }
+        private set { SetValue(IsStepDraggingProperty, value); }
+    }
+    public static readonly DependencyProperty IsStepDraggingProperty =
+        DependencyProperty.Register(nameof(IsStepDragging), typeof(bool), typeof(FlyleafHost), new PropertyMetadata(false));
 
     public FrameworkElement MarginTarget
     {
@@ -1259,8 +1290,30 @@ public class FlyleafHost : ContentControl, IHostPlayer, IDisposable
             }
         }
 
-        // Swap
-        else if ((SwapOnDrop == availWindow || SwapOnDrop == AvailableWindows.Both) && 
+        // Zoom drag: Shift+drag, up/right = zoom in, down/left = zoom out
+        // (takes priority over Swap below, which also uses Shift+drag)
+        else if (Player != null &&
+            (Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift)) &&
+            !(Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl)))
+        {
+            dragStepAccum = 0;
+            dragStepLastPoint = mouseLeftDownPoint;
+            IsZoomDragging = true;
+        }
+
+        // Step drag: Ctrl+drag, up/right = next frame, down/left = previous frame
+        // (takes priority over DragMoveOwner/DragMove below, which also use Ctrl+drag)
+        else if (Player != null &&
+            (Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl)) &&
+            !(Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift)))
+        {
+            dragStepAccum = 0;
+            dragStepLastPoint = mouseLeftDownPoint;
+            IsStepDragging = true;
+        }
+
+        // Swap (dead for Shift+drag now that Zoom drag above always catches it)
+        else if ((SwapOnDrop == availWindow || SwapOnDrop == AvailableWindows.Both) &&
             (Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift)))
         {
             IsSwappingStarted = true;
@@ -1281,14 +1334,14 @@ public class FlyleafHost : ContentControl, IHostPlayer, IDisposable
             IsPanMoving = true;
         }
 
-        // DragMoveOwner (now requires Ctrl, see PanMove above)
+        // DragMoveOwner (dead: requires Ctrl, but Step drag above always catches Ctrl+drag)
         else if ((Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl)) &&
             IsAttached && Owner != null &&
             (AttachedDragMove == availDragMoveOwner || AttachedDragMove == AttachedDragMoveOptions.BothOwner))
             IsDragMovingOwner = true;
 
 
-        // DragMove (Attach|Detach) (now requires Ctrl, see PanMove above)
+        // DragMove (Attach|Detach) (dead: requires Ctrl, but Step drag above always catches Ctrl+drag)
         else if ((Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl)) &&
             ((IsAttached && (AttachedDragMove == availDragMove  || AttachedDragMove == AttachedDragMoveOptions.Both))
             ||  (!IsAttached && (DetachedDragMove == availWindow    || DetachedDragMove == AvailableWindows.Both))))
@@ -1306,7 +1359,7 @@ public class FlyleafHost : ContentControl, IHostPlayer, IDisposable
     private void Overlay_LostMouseCapture(object sender, MouseEventArgs e) => Overlay_ReleaseCapture();
     private void Surface_ReleaseCapture()
     {
-        if (!IsResizing && !IsPanMoving && !IsDragMoving && !IsDragMovingOwner)
+        if (!IsResizing && !IsPanMoving && !IsDragMoving && !IsDragMovingOwner && !IsZoomDragging && !IsStepDragging)
             return;
 
         Surface.ReleaseMouseCapture();
@@ -1333,12 +1386,16 @@ public class FlyleafHost : ContentControl, IHostPlayer, IDisposable
             IsDragMoving = false;
         else if (IsDragMovingOwner)
             IsDragMovingOwner = false;
+        else if (IsZoomDragging)
+            IsZoomDragging = false;
+        else if (IsStepDragging)
+            IsStepDragging = false;
         else
             return;
     }
     private void Overlay_ReleaseCapture()
     {
-        if (!IsResizing && !IsPanMoving && !IsDragMoving && !IsDragMovingOwner)
+        if (!IsResizing && !IsPanMoving && !IsDragMoving && !IsDragMovingOwner && !IsZoomDragging && !IsStepDragging)
             return;
 
         Overlay.ReleaseMouseCapture();
@@ -1365,6 +1422,10 @@ public class FlyleafHost : ContentControl, IHostPlayer, IDisposable
             IsDragMoving = false;
         else if (IsDragMovingOwner)
             IsDragMovingOwner = false;
+        else if (IsZoomDragging)
+            IsZoomDragging = false;
+        else if (IsStepDragging)
+            IsStepDragging = false;
     }
 
     private void Surface_MouseMove(object sender, MouseEventArgs e)
@@ -1431,6 +1492,47 @@ public class FlyleafHost : ContentControl, IHostPlayer, IDisposable
             return;
         }
 
+        // Shift+Drag: zoom in/out, one step every DragStepPixels of up/right (+) or down/left (-) movement
+        if (IsZoomDragging)
+        {
+            dragStepAccum += (cur.X - dragStepLastPoint.X) - (cur.Y - dragStepLastPoint.Y);
+            dragStepLastPoint = cur;
+
+            Point curDpi = new(cur.X * DpiX, cur.Y * DpiY);
+            while (dragStepAccum >= DragStepPixels)
+            {
+                Player.ZoomIn(curDpi);
+                dragStepAccum -= DragStepPixels;
+            }
+            while (dragStepAccum <= -DragStepPixels)
+            {
+                Player.ZoomOut(curDpi);
+                dragStepAccum += DragStepPixels;
+            }
+
+            return;
+        }
+
+        // Ctrl+Drag: step frames, one step every DragStepPixels of up/right (+) or down/left (-) movement
+        if (IsStepDragging)
+        {
+            dragStepAccum += (cur.X - dragStepLastPoint.X) - (cur.Y - dragStepLastPoint.Y);
+            dragStepLastPoint = cur;
+
+            while (dragStepAccum >= DragStepPixels)
+            {
+                Player.ShowFrameNext();
+                dragStepAccum -= DragStepPixels;
+            }
+            while (dragStepAccum <= -DragStepPixels)
+            {
+                Player.ShowFramePrev();
+                dragStepAccum += DragStepPixels;
+            }
+
+            return;
+        }
+
         if (IsFullScreen)
             return;
 
@@ -1486,12 +1588,11 @@ public class FlyleafHost : ContentControl, IHostPlayer, IDisposable
         if      ((Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl)) &&
             (PanZoomOnCtrlWheel == AvailableWindows.Surface || PanZoomOnCtrlWheel == AvailableWindows.Both))
         {
-            var cur = e.GetPosition(Surface);
-            Point curDpi = new(cur.X * DpiX, cur.Y * DpiY);
+            // Ctrl+Wheel: step frames, consistent with Ctrl+Drag (see SO_MouseLeftButtonDown)
             if (e.Delta > 0)
-                Player.ZoomIn(curDpi);
+                Player.ShowFrameNext();
             else
-                Player.ZoomOut(curDpi);
+                Player.ShowFramePrev();
         }
         else if ((Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift)) &&
             (PanRotateOnShiftWheel == AvailableWindows.Surface || PanZoomOnCtrlWheel == AvailableWindows.Both))
@@ -1526,12 +1627,11 @@ public class FlyleafHost : ContentControl, IHostPlayer, IDisposable
         if      ((Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl)) &&
             (PanZoomOnCtrlWheel == AvailableWindows.Overlay || PanZoomOnCtrlWheel == AvailableWindows.Both))
         {
-            var cur = e.GetPosition(Overlay);
-            Point curDpi = new(cur.X * DpiX, cur.Y * DpiY);
+            // Ctrl+Wheel: step frames, consistent with Ctrl+Drag (see SO_MouseLeftButtonDown)
             if (e.Delta > 0)
-                Player.ZoomIn(curDpi);
+                Player.ShowFrameNext();
             else
-                Player.ZoomOut(curDpi);
+                Player.ShowFramePrev();
         }
         else if ((Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift)) &&
             (PanRotateOnShiftWheel == AvailableWindows.Overlay || PanZoomOnCtrlWheel == AvailableWindows.Both))
