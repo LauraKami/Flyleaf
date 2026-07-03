@@ -1499,6 +1499,15 @@ public class FlyleafHost : ContentControl, IHostPlayer, IDisposable
             else
                 Player.ZoomOut(curDpi);
         }
+        else if (!Keyboard.IsKeyDown(Key.LeftCtrl) && !Keyboard.IsKeyDown(Key.RightCtrl) &&
+            !Keyboard.IsKeyDown(Key.LeftShift) && !Keyboard.IsKeyDown(Key.RightShift))
+        {
+            // Plain wheel (no modifier): step through the video frame by frame
+            if (e.Delta > 0)
+                Player.ShowFrameNext();
+            else
+                Player.ShowFramePrev();
+        }
 
         //else if (IsAttached) // TBR ScrollViewer
         //{
@@ -1529,6 +1538,15 @@ public class FlyleafHost : ContentControl, IHostPlayer, IDisposable
                 Player.ZoomIn(curDpi);
             else
                 Player.ZoomOut(curDpi);
+        }
+        else if (!Keyboard.IsKeyDown(Key.LeftCtrl) && !Keyboard.IsKeyDown(Key.RightCtrl) &&
+            !Keyboard.IsKeyDown(Key.LeftShift) && !Keyboard.IsKeyDown(Key.RightShift))
+        {
+            // Plain wheel (no modifier): step through the video frame by frame
+            if (e.Delta > 0)
+                Player.ShowFrameNext();
+            else
+                Player.ShowFramePrev();
         }
     }
 
